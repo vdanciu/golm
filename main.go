@@ -1,9 +1,9 @@
-// package main
+package main
 
-// import (
-// 	"fmt"
-// 	"vdanciu_lang_model/micrograd/migete"
-// )
+import (
+	"fmt"
+	"vdanciu_lang_model/micrograd/migete"
+)
 
 // func main() {
 // 	//CreateDataset1("/Users/vdanciu/Downloads/lmd_matched")
@@ -36,3 +36,15 @@
 // // 	fmt.Printf("x: %v\n", x)
 // // 	fmt.Printf("y: %v\n", y)
 // // }
+
+func main() {
+	t1 := migete.NewTensor(migete.FromData[float64]([][]float64{
+		{10.0, 20.0, 30.0}, {20.0, 30.0, 50.0}, {30.0, 40.0, 30.0}}))
+	t2 := migete.NewTensor(migete.FromData[float64]([][]float64{
+		{1.0, 2.0, 3.0}, {2.0, 3.0, 5.0}, {3.0, 4.0, 3.0}}))
+	t3 := t1.Mul(t2)
+	fmt.Printf("t3: %v\n", t3)
+	t3.Backward()
+	fmt.Printf("t1.grad %v\n", t1.Grad)
+	fmt.Printf("t2.grad %v\n", t2.Grad)
+}

@@ -1,6 +1,7 @@
 package migete
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"runtime/debug"
@@ -74,6 +75,40 @@ func TestSoftmax(t *testing.T) {
 	if floatUnequal(t2.Data.Data, ref) {
 		t.Errorf("Softmax failed, got %v, want %v", t2.Data.Data, ref)
 	}
+}
+
+func TestView(t *testing.T) {
+	t1 := NewTensor(FromData[float64]([][]float64{
+		{10.0, 20.0, 30.0}, {20.0, 30.0, 50.0}, {30.0, 40.0, 30.0}}))
+	t2 := t1.View(-1, 1)
+	ref := []float64{
+		10.0, 20.0, 30.0, 20.0, 30.0, 50.0, 30.0, 40.0, 30.0}
+	if floatUnequal(t2.Data.Data, ref) {
+		t.Errorf("View failed, got %v, want %v", t2.Data.Data, ref)
+	}
+	if t1.Get(1, 1) != t2.Get(4, 0) {
+		t.Errorf("View failed, got %v, want %v", t2.Get(4, 0), t1.Get(1, 1))
+	}
+}
+
+func TestGather(t *testing.T) {
+	t1 := NewTensor(FromData[float64]([][]float64{
+		{10.0, 20.0, 30.0}, {40.0, 50.0, 60.0}, {70.0, 80.0, 90.0}}))
+	t2 := NewTensor(FromData[int]([][]int{{0}, {1}, {0}}))
+	fmt.Printf("t1: %v\n", t1.Data.Data)
+	fmt.Printf("t2: %v\n", t2.Data.Data)
+	t3 := t1.Gather(0, t2)
+	ref := []float64{10.0, 40.0, 10.0}
+	if floatUnequal(t3.Data.Data, ref) {
+		t.Errorf("Gather failed, got %v, want %v", t3.Data.Data, ref)
+	}
+	fmt.Printf("t2: %v\n", t2.Data.Data)
+	t3 = t1.Gather(1, t2)
+	ref = []float64{10.0, 50.0, 70.0}
+	if floatUnequal(t3.Data.Data, ref) {
+		t.Errorf("Gather failed, got %v, want %v", t3.Data.Data, ref)
+	}
+
 }
 
 func helperTestAdd[T Number](t *testing.T, a, b, result any) {

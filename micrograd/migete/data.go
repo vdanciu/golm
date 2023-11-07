@@ -5,28 +5,10 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
-	"unsafe"
 )
 
 type Number interface {
 	int | float64 | float32
-}
-
-type TensorBase interface {
-	int | float64 | float32 |
-		[]int | [][]int | [][][]int | [][][][]int |
-		[]float64 | [][]float64 | [][][]float64 | [][][][]float64 |
-		[]float32 | [][]float32 | [][][]float32 | [][][][]float32
-}
-
-func Flatten[T Number](data interface{}) []T {
-	return flatten[T](reflect.ValueOf(data))
-}
-
-type MakeShapeFunc func(dims ...int) []int
-
-func MakeShape(dims ...int) []int {
-	return dims
 }
 
 type TensorData[T Number] struct {
@@ -36,8 +18,20 @@ type TensorData[T Number] struct {
 	Scalar bool
 }
 
+func Flatten[T Number](data any) []T {
+	return flatten[T](reflect.ValueOf(data))
+}
+
+func MakeShape(dims ...int) []int {
+	return dims
+}
+
 func NewTensorData[T Number](shape ShapeType, data []T, scalar bool) *TensorData[T] {
 	return &TensorData[T]{Data: data, Shape: shape, Scalar: scalar}
+}
+
+func NewEmptyTensorData[T Number](shape ShapeType, scalar bool) *TensorData[T] {
+	return NewTensorData[T](shape, make([]T, getSize(shape)), scalar)
 }
 
 func (t *TensorData[T]) String() string {
@@ -67,6 +61,46 @@ func (l *TensorData[T]) Reshape(shape ShapeType) *TensorData[T] {
 	}
 	l.Shape = shape
 	return l
+}
+
+func (l *TensorData[T]) Gather(dim int, indices *TensorData[int]) *TensorData[T] {
+	if len(l.Shape) != len(indices.Shape) {
+		panic("Gather: incompatible shapes (should have the same number of dimensions)")
+	}
+
+	for d, size := range l.Shape {
+		if d != dim && size < indices.Shape[d] {
+			panic("Gather: index should not be larger on any dimension other than the one we are gathering")
+		}
+	}
+	/*
+		out[i][j][k] = input[index[i][j][k]][j][k]  # if dim == 0
+		out[i][j][k] = input[i][index[i][j][k]][k]  # if dim == 1
+		out[i][j][k] = input[i][j][index[i][j][k]]  # if dim == 2
+	*/
+	out := make([]T, indices.Size())
+	for i := 0; i < len(out); i++ {
+		multiIdx := getMultiIndex(i, indices.Shape)
+		fmt.Printf("multiIdx: %v\n", multiIdx)
+		fmt.Printf("indices.Data: %v\n", indices.Data)
+		multiIdx[dim] = indices.Data[i]
+		dataIdx := getFlatIndex(multiIdx, l.Shape)
+		fmt.Printf("shape: %v\n", l.Shape)
+		fmt.Printf("dataIdx: %v\n", dataIdx)
+		out[i] = l.Data[dataIdx]
+	}
+	return &TensorData[T]{Data: out, Shape: indices.Shape}
+}
+
+func (l *TensorData[T]) View(shape ShapeType) *TensorData[T] {
+	if shape[0] == -1 {
+		shape[0] = l.Size() / getSize(shape[1:])
+	}
+	if l.Size() != getSize(shape) {
+		panic("View: incompatible shapes")
+	}
+	v := &TensorData[T]{Data: l.Data, Shape: shape}
+	return v
 }
 
 func (l *TensorData[T]) Add(other *TensorData[T]) *TensorData[T] {
@@ -276,32 +310,70 @@ func (p *TensorData[T]) Softmax(dim int) *TensorData[float64] {
 	return &TensorData[float64]{Data: result, Shape: p.Shape}
 }
 
-// func (p *TensorData[T]) CrossEntropy(y *TensorData[int]) *TensorData[float64] {
-// 	if !reflect.DeepEqual(p.Shape[0:len(p.Shape)-1], y.Shape) {
-// 		panic("CrossEntropy: incompatible shapes")
-// 	}
-// 	result := make([]float64, p.Shape[len(p.Shape)-1])
-// 	for i := 0; i < len(result); i++ {
-// 		p := p.Data[i*len(y.Data)+y.Data[i]]
-// 		result[i] = -math.Log((float64)(p))
-// 	}
-// }
+func (p *TensorData[T]) Log() *TensorData[float64] {
+	result := make([]float64, p.Size())
+	for i := 0; i < p.Size(); i++ {
+		result[i] = math.Log(float64(p.Data[i]))
+	}
+	return &TensorData[float64]{Data: result, Shape: p.Shape}
+}
+
+func (p *TensorData[T]) Neg() *TensorData[T] {
+	result := make([]T, p.Size())
+	for i := 0; i < p.Size(); i++ {
+		result[i] = -p.Data[i]
+	}
+	return &TensorData[T]{Data: result, Shape: p.Shape}
+}
+
+func (p *TensorData[T]) Mean() *TensorData[float64] {
+	size := float64(p.Size())
+	var result float64
+	for i := 0; i < p.Size(); i++ {
+		result += float64(p.Data[i]) / size
+	}
+	return &TensorData[float64]{Data: []float64{result}, Shape: []int{1}}
+}
+
+func (p *TensorData[T]) CrossEntropy(target *TensorData[int]) *TensorData[float64] {
+	softmax_probs := p.Softmax(1)
+	target_view := target.View([]int{-1, 1})
+	gather := softmax_probs.Gather(1, target_view)
+	ilog := gather.Log().Neg()
+	loss := ilog.Mean()
+	return loss
+}
+
+func (p *TensorData[T]) Fill(value T) {
+	for i := 0; i < p.Size(); i++ {
+		p.Data[i] = value
+	}
+}
 
 func flatten[T Number](data reflect.Value) []T {
+	shape := make([]int, 0)
 	val := data
 	size := 1
 	for val.Kind() == reflect.Slice {
+		shape = append(shape, val.Len())
 		size *= val.Len()
 		val = val.Index(0)
 	}
-	var result []T
-	if size == 1 && data.Kind() != reflect.Slice {
-		result = []T{data.Interface().(T)}
-	} else {
-		fe := (*T)(unsafe.Pointer(val.Addr().Pointer()))
-		result = unsafe.Slice(fe, size)
+	if len(shape) == 1 {
+		return data.Interface().([]T)
+	} else if len(shape) > 1 {
+		multiIdx := make([]int, len(shape)-1)
+		result := make([]T, 0, size)
+		for ; isValid(multiIdx, shape); next(multiIdx, shape) {
+			val := data
+			for i := 0; i < len(multiIdx); i++ {
+				val = val.Index(multiIdx[i])
+			}
+			result = append(result, val.Interface().([]T)...)
+		}
+		return result
 	}
-	return result
+	panic("flatten: invalid shape")
 }
 
 func tanh[T Number](x float64) T {
@@ -331,9 +403,12 @@ func FromData[T Number](data any) (shape ShapeType, flatData []T, scalar bool) {
 		shape = append(shape, val.Len())
 		val = val.Index(0)
 	}
-	if len(shape) == 1 {
+	if scalar {
+		shape = []int{1}
+		flatData = []T{data.(T)}
+	} else if len(shape) == 1 {
 		flatData = data.([]T)
-	} else {
+	} else if len(shape) > 1 {
 		flatData = flatten[T](reflect.ValueOf(data))
 	}
 	return shape, flatData, scalar
@@ -345,13 +420,26 @@ func getFlatIndex(indices []int, shape []int) int {
 	}
 	index := 0
 	for i := 0; i < len(indices); i++ {
+		if indices[i] >= shape[i] {
+			panic("getFlatIndex: index out of range")
+		}
 		sp := 1
 		for j := i + 1; j < len(indices); j++ {
 			sp *= shape[j]
 		}
 		index += indices[i] * sp
 	}
+	fmt.Printf("getFlatIndex: index: %v, shape: %v, result: %v\n", indices, shape, index)
 	return index
+}
+
+func getMultiIndex(index int, shape []int) []int {
+	multiIndex := make([]int, len(shape))
+	for i := len(shape) - 1; i >= 0; i-- {
+		multiIndex[i] = index % shape[i]
+		index /= shape[i]
+	}
+	return multiIndex
 }
 
 func softmax[T Number](in []T, out []float64, size, offset int) {
@@ -362,5 +450,24 @@ func softmax[T Number](in []T, out []float64, size, offset int) {
 	}
 	for i := 0; i < size; i++ {
 		out[offset+i] /= sum
+	}
+}
+
+func isValid(indices, shape []int) bool {
+	for i := 0; i < len(indices); i++ {
+		if indices[i] <= shape[i]-1 {
+			return true
+		}
+	}
+	return false
+}
+
+func next(indices, shape []int) {
+	for i := len(indices) - 1; i >= 0; i-- {
+		if indices[i] < shape[i]-1 || i == 0 {
+			indices[i]++
+			return
+		}
+		indices[i] = 0
 	}
 }

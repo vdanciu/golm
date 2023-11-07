@@ -9,9 +9,9 @@ import (
 	"vdanciu_lang_model/micrograd/migete"
 )
 
-func main() {
-	RunNames()
-}
+// func main() {
+// 	RunNames()
+// }
 
 func RunNames() {
 	// read from the file "names.txt and create an array of strings
