@@ -87,9 +87,10 @@ func RunNames() {
 		ix := migete.NewRandomUniformTensor[int](migete.MakeShape(MINIBATCH_SIZE), 0, Xtr.Shape()[0])
 		inputs := Xtr.Index(ix)
 		emb := C.Index(inputs)
-		h := emb.Reshape(MINIBATCH_SIZE, EMBEDDINGS_SIZE*BLOCK_SIZE).Mul(W1).Add(b1).Tanh()
-		logits := h.Mul(W2).Add(b2)
+		h := emb.Reshape(MINIBATCH_SIZE, EMBEDDINGS_SIZE*BLOCK_SIZE).MatMul(W1).Add(b1).Tanh()
+		logits := h.MatMul(W2).Add(b2)
 		loss := logits.CrossEntropy(Ytr.Index(ix))
+		loss.Backward()
 	}
 }
 

@@ -38,13 +38,14 @@ import (
 // // }
 
 func main() {
-	t1 := migete.NewTensor(migete.FromData[float64]([][]float64{
+	t1 := migete.NewTensor(migete.FromData[float32]([][]float32{
 		{10.0, 20.0, 30.0}, {20.0, 30.0, 50.0}, {30.0, 40.0, 30.0}}))
-	t2 := migete.NewTensor(migete.FromData[float64]([][]float64{
+	t2 := migete.NewTensor(migete.FromData[float32]([][]float32{
 		{1.0, 2.0, 3.0}, {2.0, 3.0, 5.0}, {3.0, 4.0, 3.0}}))
-	t3 := t1.Mul(t2)
+	t3 := t2.Tanh()
 	fmt.Printf("t3: %v\n", t3)
 	t3.Backward()
 	fmt.Printf("t1.grad %v\n", t1.Grad)
 	fmt.Printf("t2.grad %v\n", t2.Grad)
+	fmt.Printf("t3.grad %v\n", t3.Grad)
 }

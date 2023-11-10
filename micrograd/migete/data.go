@@ -118,6 +118,22 @@ func (l *TensorData[T]) Add(other *TensorData[T]) *TensorData[T] {
 	return &TensorData[T]{Data: result, Shape: l.Shape}
 }
 
+// Emelent-wise multiplication
+func (l *TensorData[T]) Mul(other *TensorData[T]) *TensorData[T] {
+	if !reflect.DeepEqual(l.Shape, other.Shape) {
+		if !l.Scalar && !other.Scalar {
+			panic("Mul: incompatible shapes")
+		}
+	}
+	size := max(l.Size(), other.Size())
+	result := make([]T, size)
+	for i := 0; i < size; i++ {
+		result[i] = l.Data[ternary[int](l.Scalar, 0, i)] * other.Data[ternary(other.Scalar, 0, i)]
+	}
+
+	return &TensorData[T]{Data: result, Shape: l.Shape}
+}
+
 /*
 	From pytorch this are the rules of tensor multiplication:
 	1.	If both tensors are 1-dimensional, the dot product (scalar) is returned.
@@ -145,7 +161,7 @@ func (l *TensorData[T]) Add(other *TensorData[T]) *TensorData[T] {
 		the first tensor behaves as if it were copied along that dimension
 */
 
-func (t1 *TensorData[T]) Mul(t2 *TensorData[T]) *TensorData[T] {
+func (t1 *TensorData[T]) MatMul(t2 *TensorData[T]) *TensorData[T] {
 
 	// check if both are 1-dimensional
 	if len(t1.Shape) == 1 && len(t2.Shape) == 1 {
@@ -322,6 +338,14 @@ func (p *TensorData[T]) Neg() *TensorData[T] {
 	result := make([]T, p.Size())
 	for i := 0; i < p.Size(); i++ {
 		result[i] = -p.Data[i]
+	}
+	return &TensorData[T]{Data: result, Shape: p.Shape}
+}
+
+func (p *TensorData[T]) Pow(n int) *TensorData[T] {
+	result := make([]T, p.Size())
+	for i := 0; i < p.Size(); i++ {
+		result[i] = (T)(math.Pow(float64(p.Data[i]), float64(n)))
 	}
 	return &TensorData[T]{Data: result, Shape: p.Shape}
 }

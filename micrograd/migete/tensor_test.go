@@ -134,7 +134,7 @@ func helperTestMul[T Number](t *testing.T, a, b, result any) {
 	}()
 	t1 := NewTensor(FromData[T](a))
 	t2 := NewTensor(FromData[T](b))
-	ta := t1.Mul(t2)
+	ta := t1.MatMul(t2)
 	if !reflect.DeepEqual(ta.Data.Data, flatten[T](reflect.ValueOf(result))) {
 		t.Errorf("Mul failed, got %v, want %v", ta.Data.Data, result)
 	}

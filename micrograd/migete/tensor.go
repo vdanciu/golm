@@ -100,18 +100,27 @@ func (t *Tensor[T]) Add(other *Tensor[T]) *Tensor[T] {
 	return out
 }
 
-func (t *Tensor[T]) Mul(other *Tensor[T]) *Tensor[T] {
-	out := &Tensor[T]{Data: t.Data.Mul(other.Data), Grad: nil, prev: []Backwardable{t, other}, op: "*", backward: func() {}}
+func (t *Tensor[T]) MatMul(other *Tensor[T]) *Tensor[T] {
+	out := &Tensor[T]{Data: t.Data.MatMul(other.Data), Grad: nil, prev: []Backwardable{t, other}, op: "*", backward: func() {}}
 	out.backward = func() {
 		initGradients[T](t, other, out)
-		t.Grad = t.Grad.Add(other.Data.Mul(out.Grad))
-		other.Grad = other.Grad.Add(t.Grad.Mul(out.Grad))
+		t.Grad = t.Grad.Add(other.Data.MatMul(out.Grad))
+		other.Grad = other.Grad.Add(t.Grad.MatMul(out.Grad))
 	}
 	return out
 }
 
 func (t *Tensor[T]) Tanh() *Tensor[T] {
-	return &Tensor[T]{Data: t.Data.Tanh(), Grad: nil, prev: []Backwardable{t}, op: "tanh", backward: func() {}}
+	out := &Tensor[T]{Data: t.Data.Tanh(), Grad: nil, prev: []Backwardable{t}, op: "tanh", backward: func() {}}
+	out.backward = func() {
+		initGradients[T](t, out)
+		t.Grad = t.Grad.Add(
+			out.Grad.Mul(
+				out.Data.Pow(2).
+					Neg().
+					Add(NewTensorData[T]([]int{}, []T{1}, true))))
+	}
+	return out
 }
 
 func (t *Tensor[T]) Softmax(dim int) *Tensor[float64] {
