@@ -123,6 +123,15 @@ func (t *Tensor[T]) Tanh() *Tensor[T] {
 	return out
 }
 
+func (t *Tensor[T]) Neg() *Tensor[T] {
+	out := &Tensor[T]{Data: t.Data.Neg(), Grad: nil, prev: []Backwardable{t}, op: "neg", backward: func() {}}
+	out.backward = func() {
+		initGradients[T](t, out)
+		t.Grad = t.Grad.Add(out.Grad.Neg())
+	}
+	return out
+}
+
 func (t *Tensor[T]) Softmax(dim int) *Tensor[float64] {
 	return &Tensor[float64]{Data: t.Data.Softmax(dim), Grad: nil, prev: []Backwardable{t}, op: "softmax", backward: func() {}}
 }
@@ -133,10 +142,6 @@ func (t *Tensor[T]) View(shape ...int) *Tensor[T] {
 
 func (t *Tensor[T]) Log() *Tensor[float64] {
 	return &Tensor[float64]{Data: t.Data.Log(), Grad: nil, prev: []Backwardable{t}, op: "log", backward: func() {}}
-}
-
-func (t *Tensor[T]) Neg() *Tensor[T] {
-	return &Tensor[T]{Data: t.Data.Neg(), Grad: nil, prev: []Backwardable{t}, op: "neg", backward: func() {}}
 }
 
 func (t *Tensor[T]) Mean() *Tensor[float64] {
